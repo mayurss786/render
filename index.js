@@ -5,27 +5,35 @@ const app = express();
 
 app.get('/scrape', async (req, res) => {
   const { url: inputUrl } = req.query;
-
   if (!inputUrl) {
     return res.status(400).json({ error: 'Missing ?url=' });
   }
 
   try {
-    // Step 1: Follow redirects and fetch HTML
-    const response = await fetch(inputUrl, {
-      method: 'GET',
+    // Step 1: Follow initial redirect
+    const firstResp = await fetch(inputUrl, {
       redirect: 'follow',
-      headers: {
-        'User-Agent': 'Mozilla/5.0',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-      }
+      headers: { 'User-Agent': 'Mozilla/5.0' }
     });
 
-    const finalUrl = response.url;
-    const html = await response.text();
-    const $ = load(html);
+    const firstUrl = firstResp.url;
+    let html = await firstResp.text();
+    let finalUrl = firstUrl;
 
-    // Step 2: Extract metadata
+    // Step 2: Detect and follow ?dl= param if present
+    const dlParam = new URL(firstUrl).searchParams.get('dl');
+    if (dlParam) {
+      const decodedUrl = decodeURIComponent(dlParam);
+      const secondResp = await fetch(decodedUrl, {
+        redirect: 'follow',
+        headers: { 'User-Agent': 'Mozilla/5.0' }
+      });
+      finalUrl = secondResp.url;
+      html = await secondResp.text();
+    }
+
+    // Step 3: Extract metadata
+    const $ = load(html);
     const title =
       $('meta[property="og:title"]').attr('content') ||
       $('title').first().text().trim() ||
@@ -38,13 +46,13 @@ app.get('/scrape', async (req, res) => {
 
     const image =
       $('meta[property="og:image"]').attr('content') ||
-      $('img[data-old-hires]').attr('src') || // Amazon fallback
-      $('img[src*="rukminim2"]').attr('src') || // Flipkart fallback
+      $('img[data-old-hires]').attr('src') ||
+      $('img[src*="rukminim2"]').attr('src') ||
       null;
 
-    // Step 3: Return all structured data
     return res.json({
       input_url: inputUrl,
+      redirect_chain: [inputUrl, firstUrl, finalUrl],
       final_url: finalUrl,
       title,
       description,
@@ -60,7 +68,6 @@ app.get('/scrape', async (req, res) => {
   }
 });
 
-// Start the server
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`🚀 Scraper running on http://localhost:${port}`);
