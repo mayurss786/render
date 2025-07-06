@@ -143,10 +143,9 @@ async function fallbackMetaScraper(url) {
   return meta;
 }
 
-// 📮 POST Endpoint for scraping
-app.post('/scrape', async (req, res) => {
-  const { url } = req.body;
-  if (!url) return res.status(400).json({ error: 'Missing product URL' });
+app.get('/scrape', async (req, res) => {
+  const { url } = req.query;
+  if (!url) return res.status(400).json({ error: 'Missing product URL (?url=...)' });
 
   try {
     const site = detectSite(url);
