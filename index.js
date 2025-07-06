@@ -1,7 +1,5 @@
 import express from 'express';
-import fetch from 'node-fetch';
 import cheerio from 'cheerio';
-
 const app = express();
 
 app.get('/scrape', async (req, res) => {
